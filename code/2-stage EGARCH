@@ -1,0 +1,93 @@
+from arch import arch_model
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+
+
+df = pd.read_excel(r'C:\Users\WZHFURA\Desktop\EURO_STOXX_BL.xlsx', sheet_name='Sheet1')
+
+returns = []
+sentiment = []
+
+for _, row in df.iterrows():
+    for col in ['rt', 'rt+1', 'rt+2', 'rt+3', 'rt+4', 'rt+5', 'rt+6', 'rt+7']:
+        returns.append(row[col])
+        sentiment.append(row['Positive'] - row['Negative'])
+
+# Create modeling DataFrame
+data = pd.DataFrame({
+    'returns': returns,
+    'sentiment': sentiment
+}).dropna()
+
+# Fit EGARCH(1,1) model
+model = arch_model(data['returns'], vol='EGARCH', p=1, q=1, mean='Zero', dist='normal')
+res = model.fit(disp='off')
+
+# Extract conditional variance (squared volatility)
+cond_var = res.conditional_volatility ** 2
+# Optional: log-transform to stabilize variance
+log_var = np.log(cond_var)
+
+# Regress log-variance on sentiment
+X = sm.add_constant(data['sentiment'])
+reg = sm.OLS(log_var, X).fit()
+
+# Show summary
+print(reg.summary())
+
+# Bootstrap procedure
+for _ in range(n_bootstrap):
+    # Resample residuals
+    sample = np.random.choice(data.index, size=len(data), replace=True)
+    resampled_data = data.loc[sample]
+
+    # Regress on sentiment with the resampled data
+    X_resampled = sm.add_constant(resampled_data['sentiment'])
+    y_resampled = np.log(res.conditional_volatility[sample]**2)
+    reg_resampled = sm.OLS(y_resampled, X_resampled).fit()
+
+    # Save the coefficient for sentiment
+    bootstrap_coefs.append(reg_resampled.params['sentiment'])
+
+# Calculate 95% Confidence Interval for sentiment coefficient
+bootstrap_coefs = np.array(bootstrap_coefs)
+ci_lower, ci_upper = np.percentile(bootstrap_coefs, [2.5, 97.5])
+
+# Output the results
+print(f"Bootstrapped 95% Confidence Interval for Sentiment Coefficient: [{ci_lower:.4f}, {ci_upper:.4f}]")
+
+
+------------------ results-----------
+
+
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:               cond_vol   R-squared:                       0.015
+Model:                            OLS   Adj. R-squared:                  0.012
+Method:                 Least Squares   F-statistic:                     5.991
+Date:                Tue, 06 May 2025   Prob (F-statistic):             0.0148
+Time:                        16:20:28   Log-Likelihood:                -752.00
+No. Observations:                 400   AIC:                             1508.
+Df Residuals:                     398   BIC:                             1516.
+Df Model:                           1                                         
+Covariance Type:            nonrobust                                         
+==============================================================================
+                 coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------
+const         -8.3924      0.102    -82.462      0.000      -8.592      -8.192
+sentiment      0.0151      0.006      2.448      0.015       0.003       0.027
+==============================================================================
+Omnibus:                      367.919   Durbin-Watson:                   0.756
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):            10829.438
+Skew:                           3.883   Prob(JB):                         0.00
+Kurtosis:                      27.278   Cond. No.                         21.1
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+Bootstrapped 95% Confidence Interval for Sentiment Coefficient: [0.0021, 0.0308]
+
+
+
+
